@@ -25,6 +25,7 @@ import io.github.douglasribeiro1.cubebaby.modelo.PoliticaChaves
 import io.github.douglasribeiro1.cubebaby.modelo.Slot
 import io.github.douglasribeiro1.cubebaby.modelo.TAM_TIMBRE
 import io.github.douglasribeiro1.cubebaby.modelo.Timbre
+import io.github.douglasribeiro1.cubebaby.modelo.normalizado
 import io.github.douglasribeiro1.cubebaby.modelo.validarBytes
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -360,7 +361,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         repertorio = e.repertorio + imp.arquivo.repertorio.filterNot { it.id in mids },
                     )
                 }
-                if (ajustes && imp.arquivo.ajustes != null) n = n.copy(ajustes = imp.arquivo.ajustes)
+                if (ajustes && imp.arquivo.ajustes != null) n = n.copy(ajustes = imp.arquivo.ajustes.normalizado())
                 n
             }
             avisar("Dados importados" + if (imp.descartados > 0) " (${imp.descartados} timbres inválidos ignorados)" else "")

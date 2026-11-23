@@ -100,7 +100,7 @@ fun TelaEditor(vm: AppViewModel) {
             }
         }
         Text(
-            "Os nomes dos campos ainda são provisórios (ver docs/PROTOCOLO.md). Nomes de amps, caixas e chaves podem ser editados em Ajustes.",
+            "Controles na ordem do painel do pedal. Nomes de amps e caixas vêm do manual e podem ser renomeados em Ajustes (por exemplo, se você carregou IRs próprias).",
             Modifier.padding(16.dp, 0.dp, 16.dp, 24.dp),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -128,10 +128,10 @@ private fun LinhaSlider(
     val v = valor.roundToInt()
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(rotulo, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+            Text(rotulo, Modifier.width(110.dp), style = MaterialTheme.typography.bodyLarge)
             Text(
                 texto(v),
-                Modifier.width(120.dp),
+                Modifier.weight(1f),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 textAlign = androidx.compose.ui.text.style.TextAlign.End,

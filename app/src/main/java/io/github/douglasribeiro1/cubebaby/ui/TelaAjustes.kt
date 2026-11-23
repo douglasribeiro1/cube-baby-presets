@@ -37,7 +37,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.douglasribeiro1.cubebaby.AppViewModel
+import io.github.douglasribeiro1.cubebaby.modelo.AMPS_FABRICA
 import io.github.douglasribeiro1.cubebaby.modelo.BackupPedal
+import io.github.douglasribeiro1.cubebaby.modelo.CABS_FABRICA
 import io.github.douglasribeiro1.cubebaby.modelo.PoliticaChaves
 import java.time.LocalDate
 import java.time.OffsetDateTime
@@ -100,11 +102,23 @@ fun TelaAjustes(vm: AppViewModel) {
         }
 
         Secao("Nomes dos amps (Type)")
-        ListaNomes(vm.estado.ajustes.nomesAmps) { i, n -> vm.alterarAjustes { a -> a.copy(nomesAmps = a.nomesAmps.toMutableList().also { it[i] = n }) } }
+        Text("Padrão do manual. Renomeie se o seu pedal tiver outra lista.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        ListaNomes(vm.estado.ajustes.nomesAmps, { i -> "Posição $i — ${AMPS_FABRICA[i].tipo}" }) { i, n ->
+            vm.alterarAjustes { a -> a.copy(nomesAmps = a.nomesAmps.toMutableList().also { it[i] = n }) }
+        }
+        OutlinedButton(onClick = { vm.alterarAjustes { it.copy(nomesAmps = AMPS_FABRICA.map { a -> a.nome }) } }) { Text("Voltar aos nomes de fábrica") }
+
         Secao("Nomes das caixas (IR Cab)")
-        ListaNomes(vm.estado.ajustes.nomesCabs) { i, n -> vm.alterarAjustes { a -> a.copy(nomesCabs = a.nomesCabs.toMutableList().also { it[i] = n }) } }
+        Text("Se você carregou uma IR própria num slot pelo CubeSuite, renomeie-o aqui.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        ListaNomes(vm.estado.ajustes.nomesCabs, { i -> if (i == 0) "Posição 0 (desliga a IR)" else "Posição $i — fábrica: ${CABS_FABRICA[i]}" }) { i, n ->
+            vm.alterarAjustes { a -> a.copy(nomesCabs = a.nomesCabs.toMutableList().also { it[i] = n }) }
+        }
+        OutlinedButton(onClick = { vm.alterarAjustes { it.copy(nomesCabs = CABS_FABRICA) } }) { Text("Voltar aos nomes de fábrica") }
+
         Secao("Nomes das chaves de efeito")
-        ListaNomes(vm.estado.ajustes.nomesChaves) { i, n -> vm.alterarAjustes { a -> a.copy(nomesChaves = a.nomesChaves.toMutableList().also { it[i] = n }) } }
+        ListaNomes(vm.estado.ajustes.nomesChaves, { i -> "Chave ${i + 1} (byte ${10 + i})" }) { i, n ->
+            vm.alterarAjustes { a -> a.copy(nomesChaves = a.nomesChaves.toMutableList().also { it[i] = n }) }
+        }
 
         Secao("Registro técnico")
         Text("Presets no pedal: ${vm.hexPresets()}", fontFamily = FontFamily.Monospace, fontSize = 11.sp)
@@ -131,9 +145,9 @@ private fun Secao(t: String) {
 }
 
 @Composable
-private fun ListaNomes(nomes: List<String>, aoMudar: (Int, String) -> Unit) {
+private fun ListaNomes(nomes: List<String>, rotulo: (Int) -> String, aoMudar: (Int, String) -> Unit) {
     nomes.forEachIndexed { i, n ->
-        OutlinedTextField(n, { aoMudar(i, it) }, Modifier.fillMaxWidth(), label = { Text("Posição ${i + 1} (valor $i)") }, singleLine = true)
+        OutlinedTextField(n, { aoMudar(i, it) }, Modifier.fillMaxWidth(), label = { Text(rotulo(i), maxLines = 1) }, singleLine = true)
     }
 }
 

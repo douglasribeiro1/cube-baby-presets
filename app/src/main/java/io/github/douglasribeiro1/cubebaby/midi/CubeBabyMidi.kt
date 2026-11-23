@@ -93,7 +93,7 @@ class CubeBabyMidi(context: Context, private val log: (String) -> Unit) {
     suspend fun conectar(info: MidiDeviceInfo): String {
         fechar()
         val m = midiManager ?: throw ErroPedal("Este aparelho não tem suporte a MIDI")
-        val dev = suspendCancellableCoroutine { cont ->
+        val dev: MidiDevice = suspendCancellableCoroutine<MidiDevice?> { cont ->
             m.openDevice(info, { d -> if (cont.isActive) cont.resume(d) }, handler)
         } ?: throw ErroPedal("Não foi possível abrir o dispositivo MIDI")
         val inPort = dev.openInputPort(0)

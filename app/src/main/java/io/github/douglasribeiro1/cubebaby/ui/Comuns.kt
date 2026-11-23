@@ -22,7 +22,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import io.github.douglasribeiro1.cubebaby.modelo.AMPS_FABRICA
 import io.github.douglasribeiro1.cubebaby.modelo.Ajustes
+import io.github.douglasribeiro1.cubebaby.modelo.CABS_FABRICA
+import io.github.douglasribeiro1.cubebaby.modelo.MOD_CENTRO
 import io.github.douglasribeiro1.cubebaby.modelo.BYTES_CHAVES
 import io.github.douglasribeiro1.cubebaby.modelo.Campo
 import io.github.douglasribeiro1.cubebaby.modelo.PoliticaChaves
@@ -96,20 +99,38 @@ fun DialogoChaves(aoFechar: () -> Unit, aoEscolher: (PoliticaChaves, lembrar: Bo
     )
 }
 
-fun Ajustes.nomeAmp(v: Int) = nomesAmps.getOrNull(v) ?: "Amp ${v + 1}"
-fun Ajustes.nomeCab(v: Int) = nomesCabs.getOrNull(v) ?: "Cab ${v + 1}"
+fun Ajustes.nomeAmp(v: Int) = nomesAmps.getOrNull(v)?.ifBlank { null } ?: AMPS_FABRICA.getOrNull(v)?.nome ?: "Amp $v"
+fun Ajustes.nomeCab(v: Int) = nomesCabs.getOrNull(v)?.ifBlank { null } ?: CABS_FABRICA.getOrNull(v) ?: "Cab $v"
+fun tipoAmp(v: Int) = AMPS_FABRICA.getOrNull(v)?.tipo ?: ""
 
+/** "4 · Cali JP A — Overdrive" (número da posição, nome e tipo). */
+fun Ajustes.textoAmp(v: Int) = "$v · ${nomeAmp(v)}" + tipoAmp(v).let { if (it.isEmpty()) "" else " — $it" }
+fun Ajustes.textoCab(v: Int) = "$v · ${nomeCab(v)}"
+
+fun textoMod(v: Int) = when {
+    v < MOD_CENTRO -> "Chorus ($v)"
+    v == MOD_CENTRO -> "Desligado ($v)"
+    else -> "Phaser ($v)"
+}
+
+/** Texto do valor de um campo, igual em todas as telas. */
 fun Ajustes.textoValor(c: Campo, v: Int): String = when (c) {
-    Campo.TYPE -> nomeAmp(v)
-    Campo.IR_CAB -> nomeCab(v)
+    Campo.TYPE -> textoAmp(v)
+    Campo.IR_CAB -> textoCab(v)
+    Campo.MOD -> textoMod(v)
+    Campo.MIX -> if (v == 0) "0 · delay desligado" else v.toString()
+    Campo.REVERB -> if (v == 0) "0 · desligado" else v.toString()
     else -> v.toString()
 }
 
-/** Resumo de uma linha: "Amp 8 · Gain 7 · Tone 9 · Cab 5 · Vol 65 · efeitos ●●●". */
+/** Resumo em duas linhas curtas: amp/tipo e caixa; depois efeitos. */
 fun Ajustes.resumo(bytes: List<Int>): String {
     if (bytes.size < 13) return "—"
     val ch = BYTES_CHAVES.joinToString("") { if (bytes[it] == 1) "●" else "○" }
-    return "${nomeAmp(bytes[0])} · Gain ${bytes[1]} · Tone ${bytes[2]} · ${nomeCab(bytes[9])} · Vol ${bytes[5]} · $ch"
+    val mod = textoMod(bytes[8]).substringBefore(" (")
+    val delay = if (bytes[7] == 0) "Delay off" else "Delay ${bytes[7]}"
+    val rev = if (bytes[3] == 0) "Reverb off" else "Reverb ${bytes[3]}"
+    return "${textoAmp(bytes[0])} · Gain ${bytes[1]}\n${textoCab(bytes[9])}\nMod $mod · $delay · $rev · Vol ${bytes[5]} · $ch"
 }
 
 @Composable
@@ -117,8 +138,8 @@ fun TabelaValores(ajustes: Ajustes, bytes: List<Int>, modifier: Modifier = Modif
     Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Campo.entries.forEach { c ->
             Row(Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
-                Text(c.rotulo, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(ajustes.textoValor(c, bytes[c.byte]), style = MaterialTheme.typography.bodyMedium)
+                Text(c.rotulo, Modifier.weight(0.8f), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(ajustes.textoValor(c, bytes[c.byte]), Modifier.weight(1.2f), style = MaterialTheme.typography.bodyMedium, textAlign = androidx.compose.ui.text.style.TextAlign.End)
             }
         }
     }

@@ -4,6 +4,7 @@ import android.content.Context
 import io.github.douglasribeiro1.cubebaby.modelo.ArquivoBackup
 import io.github.douglasribeiro1.cubebaby.modelo.EstadoSalvo
 import io.github.douglasribeiro1.cubebaby.modelo.Timbre
+import io.github.douglasribeiro1.cubebaby.modelo.normalizado
 import io.github.douglasribeiro1.cubebaby.modelo.validarBytes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -23,7 +24,7 @@ class Armazenamento(context: Context) {
 
     suspend fun carregar(): EstadoSalvo = withContext(Dispatchers.IO) {
         if (!arquivo.exists()) return@withContext EstadoSalvo()
-        runCatching { JsonApp.decodeFromString(EstadoSalvo.serializer(), arquivo.readText()) }
+        runCatching { JsonApp.decodeFromString(EstadoSalvo.serializer(), arquivo.readText()).let { it.copy(ajustes = it.ajustes.normalizado()) } }
             .getOrElse {
                 // Arquivo corrompido: guarda uma cópia para não perder nada e começa do zero.
                 arquivo.copyTo(File(arquivo.parentFile, "estado-corrompido-${System.currentTimeMillis()}.json"), overwrite = true)

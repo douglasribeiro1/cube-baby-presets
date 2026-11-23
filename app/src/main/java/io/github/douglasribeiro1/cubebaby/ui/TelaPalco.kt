@@ -101,6 +101,9 @@ fun TelaPalco(vm: AppViewModel) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("${i + 1}", fontSize = 14.sp)
                         Text(t.name, fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 3)
+                        val aj = vm.estado.ajustes
+                        Text(aj.nomeAmp(t.bytes[0]), fontSize = 12.sp, textAlign = TextAlign.Center, maxLines = 1)
+                        Text(aj.nomeCab(t.bytes[9]), fontSize = 11.sp, textAlign = TextAlign.Center, maxLines = 1)
                     }
                 }
             }
