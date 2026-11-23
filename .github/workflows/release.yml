@@ -54,7 +54,41 @@ jobs:
       - name: Restaurar keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-        run: echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+        run: printf '%s' "$KEYSTORE_BASE64" | tr -d ' \r\n\t' | base64 --decode > "$RUNNER_TEMP/release.jks"
+
+      # Diz exatamente qual Secret não bate (sem mostrar nenhum valor).
+      - name: Diagnosticar keystore
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          ks="$RUNNER_TEMP/release.jks"
+          echo "Arquivo restaurado: $(stat -c%s "$ks") bytes, SHA-256 $(sha256sum "$ks" | cut -d' ' -f1)"
+          for v in KEYSTORE_PASSWORD KEY_PASSWORD KEY_ALIAS; do
+            val="${!v}"
+            if [ "$val" != "$(printf '%s' "$val" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')" ]; then
+              echo "::warning::$v começa ou termina com espaço/quebra de linha"
+            fi
+          done
+          if ! keytool -list -keystore "$ks" -storepass:env KEYSTORE_PASSWORD > "$RUNNER_TEMP/lista.txt" 2>&1; then
+            echo "::error::KEYSTORE_PASSWORD não abre o arquivo de KEYSTORE_BASE64 (senha errada ou Base64 de outro arquivo)."
+            grep -i -E "exception|error" "$RUNNER_TEMP/lista.txt" | head -3
+            exit 1
+          fi
+          grep -i "keystore type" "$RUNNER_TEMP/lista.txt"
+          echo "Entradas na keystore: $(grep -ciE 'PrivateKeyEntry' "$RUNNER_TEMP/lista.txt")"
+          if ! keytool -list -keystore "$ks" -storepass:env KEYSTORE_PASSWORD -alias "$KEY_ALIAS" > /dev/null 2>&1; then
+            echo "::error::KEY_ALIAS não existe nessa keystore. Aliases encontrados:"
+            grep -E "PrivateKeyEntry" "$RUNNER_TEMP/lista.txt" | cut -d, -f1
+            exit 1
+          fi
+          if grep -qi "keystore type: PKCS12" "$RUNNER_TEMP/lista.txt" && [ "$KEY_PASSWORD" != "$KEYSTORE_PASSWORD" ]; then
+            echo "::error::A keystore é PKCS12: KEY_PASSWORD precisa ser igual a KEYSTORE_PASSWORD."
+            exit 1
+          fi
+          rm -f "$RUNNER_TEMP/lista.txt"
+          echo "Keystore, alias e senhas conferem."
 
       - name: Testes e APK release assinado
         env:
