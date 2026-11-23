@@ -1,0 +1,85 @@
+name: Release
+
+# A cada tag v* (ex.: v0.1.0): gera o APK release assinado e publica em Releases.
+# Também pode ser disparado à mão (aba Actions > Release > Run workflow) informando a
+# versão: nesse caso o próprio workflow cria a tag v<versão> no commit escolhido.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      versao:
+        description: "Versão sem o v (ex.: 0.1.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Definir versão
+        env:
+          VERSAO_MANUAL: ${{ inputs.versao }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then v="${VERSAO_MANUAL#v}"; else v="${GITHUB_REF_NAME#v}"; fi
+          if ! echo "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then echo "::error::Versão inválida: $v (use 1.2.3)"; exit 1; fi
+          echo "VERSAO=$v" >> "$GITHUB_ENV"
+          echo "TAG=v$v" >> "$GITHUB_ENV"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Conferir Secrets
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          faltando=""
+          for v in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            [ -n "${!v}" ] || faltando="$faltando $v"
+          done
+          if [ -n "$faltando" ]; then
+            echo "::error::Secrets ausentes:$faltando. Cadastre em Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+      - name: Restaurar keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+
+      - name: Testes e APK release assinado
+        env:
+          KEYSTORE_FILE: ${{ runner.temp }}/release.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew --no-daemon -PappVersion="$VERSAO" testReleaseUnitTest assembleRelease
+
+      - name: Verificar assinatura e renomear
+        run: |
+          apk=app/build/outputs/apk/release/app-release.apk
+          test -f "$apk" || { echo "::error::APK assinado não foi gerado"; exit 1; }
+          apksigner=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
+          "$apksigner" verify --print-certs "$apk"
+          cp "$apk" "cube-baby-presets-${TAG}.apk"
+
+      - name: Apagar keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          target_commitish: ${{ github.sha }}
+          name: Cube Baby Presets ${{ env.TAG }}
+          files: cube-baby-presets-${{ env.TAG }}.apk
+          generate_release_notes: true

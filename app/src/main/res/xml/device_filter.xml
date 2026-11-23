@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- M-Vave/Cuvave Cube Baby: VID 0x301A, PID 0x5555 -->
+    <usb-device vendor-id="12314" product-id="21845" />
+</resources>
