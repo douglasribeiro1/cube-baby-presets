@@ -10,6 +10,7 @@ Obtido por análise estática do CubeSuite (Windows, Qt, site da M-Vave) e **con
 - Não há nenhuma mensagem de inicialização: basta abrir as portas e mandar comandos.
 - **Program Change não é aceito** (testado C0 00/01/02 no canal 1: o pedal ignora).
 - O pedal não envia nada espontaneamente (nem ao trocar preset nem ao girar botões).
+- **Bluetooth é só de áudio**: o pedal aparece como "CubeBaby", perfil de áudio (fones de ouvido), sem BLE-MIDI nem serviço de dados. Testado com Web Bluetooth em 23/11/2026: não aparece na busca BLE. Controle só pelo cabo USB.
 
 ### Empacotamento 7 bits (os dois lados)
 Fluxo de bits com o **bit menos significativo primeiro**:
