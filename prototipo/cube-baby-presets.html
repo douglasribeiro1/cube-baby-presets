@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cube Baby Presets</title>
+<style>
+  :root { --bg:#14161a; --card:#1e2127; --tx:#e8e8e8; --mut:#9aa0a6; --ac:#33eab8; --warn:#ffb74d; --err:#ff6b6b; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family: system-ui, Segoe UI, Roboto, sans-serif; background:var(--bg); color:var(--tx); }
+  header { padding:14px 18px; border-bottom:1px solid #2a2e35; display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; }
+  h1 { font-size:19px; margin:0; }
+  #status { font-size:13px; color:var(--mut); }
+  main { padding:14px 18px; display:grid; gap:14px; max-width:900px; margin:0 auto; }
+  .card { background:var(--card); border-radius:12px; padding:14px; }
+  .card h2 { font-size:15px; margin:0 0 10px; color:var(--mut); font-weight:600; }
+  button { background:var(--ac); color:#0b1a15; border:0; border-radius:8px; padding:10px 14px; font-weight:600; font-size:14px; cursor:pointer; }
+  button.sec { background:#2f343c; color:var(--tx); }
+  button:disabled { opacity:.4; cursor:not-allowed; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .tabs { display:flex; gap:8px; }
+  .tab { flex:1; padding:14px; font-size:20px; background:#2f343c; color:var(--tx); }
+  .tab.on { background:var(--ac); color:#0b1a15; }
+  .param { display:grid; grid-template-columns: 120px 1fr 52px; gap:10px; align-items:center; padding:8px 0; border-bottom:1px solid #2a2e35; }
+  .param label { font-size:14px; }
+  .param output { text-align:right; font-variant-numeric:tabular-nums; font-size:16px; font-weight:600; }
+  .param.saving output { color:var(--warn); } .param.err output { color:var(--err); }
+  input[type=range] { width:100%; accent-color: var(--ac); height:28px; }
+  .sw { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .sw button { background:#2f343c; color:var(--tx); }
+  .sw button.on { background:var(--ac); color:#0b1a15; }
+  select, input[type=text] { background:#2f343c; color:var(--tx); border:0; border-radius:8px; padding:9px; font-size:14px; }
+  .lib-item { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid #2a2e35; font-size:14px; }
+  .hint { color:var(--mut); font-size:13px; line-height:1.5; }
+  details summary { cursor:pointer; color:var(--mut); font-size:13px; }
+  #log { font-family: Consolas, monospace; font-size:11px; background:#0f1114; border-radius:8px; padding:8px; height:200px; overflow:auto; white-space:pre-wrap; margin-top:8px; }
+  .ok { color:var(--ac); } .warn { color:var(--warn); } .err { color:var(--err); }
+  @media (max-width:520px) { .param { grid-template-columns: 95px 1fr 44px; } }
+</style>
+</head>
+<body>
+<header>
+  <div><h1>Cube Baby Presets</h1><div id="status">Desconectado</div></div>
+  <button id="btnConnect">Conectar</button>
+</header>
+<main>
+
+<section class="card">
+  <div class="tabs">
+    <button class="tab on" data-p="0">A</button>
+    <button class="tab" data-p="1">B</button>
+    <button class="tab" data-p="2">C</button>
+  </div>
+  <div id="params" style="margin-top:10px"></div>
+  <div class="sw" id="switches"></div>
+  <p class="hint">As abas A, B e C escolhem qual preset você está <b>editando</b>; elas não trocam o preset ativo no pedal. Cada alteração é gravada direto no preset do pedal e conferida em seguida. Os nomes dos campos ainda são provisórios: se algum não bater com o que você ouve, me avise.</p>
+</section>
+
+<section class="card">
+  <h2>Biblioteca de presets</h2>
+  <div class="row">
+    <input type="text" id="libName" placeholder="Nome (ex.: Louvor X — solo)" style="flex:1;min-width:180px">
+    <button id="btnLibSave" class="sec" disabled>Guardar preset atual</button>
+  </div>
+  <div id="lib"></div>
+</section>
+
+<section class="card">
+  <h2>Backup</h2>
+  <div class="row">
+    <button id="btnExport" class="sec" disabled>Exportar os 3 presets (.json)</button>
+    <button id="btnImport" class="sec" disabled>Restaurar de arquivo…</button>
+    <button id="btnRestoreAuto" class="sec" disabled>Voltar ao backup automático</button>
+    <input type="file" id="fileImport" accept=".json,application/json" hidden>
+  </div>
+  <p class="hint" id="autoInfo"></p>
+</section>
+
+<section class="card">
+  <h2>Diagnóstico: troca de preset (A/B/C)</h2>
+  <p class="hint">Teste 1: clique em <b>Ler estado</b>, aperte a chave A, B ou C no pedal e clique de novo. Repita para as três chaves.<br>
+  Teste 2: clique em A, B e C abaixo e veja se o pedal troca de preset (envia "Program Change" no canal 1).</p>
+  <div class="row">
+    <button id="btnProbe" class="sec" disabled>Ler estado</button>
+    <button class="sec pc" data-n="0" disabled>Trocar para A</button>
+    <button class="sec pc" data-n="1" disabled>Trocar para B</button>
+    <button class="sec pc" data-n="2" disabled>Trocar para C</button>
+  </div>
+  <div id="probeOut" class="hint" style="font-family:Consolas,monospace;margin-top:8px"></div>
+</section>
+
+<section class="card">
+  <details><summary>Registro técnico</summary>
+    <div class="row" style="margin-top:8px"><button id="btnCopy" class="sec">Copiar registro</button></div>
+    <div id="log"></div>
+  </details>
+</section>
+
+</main>
+<script>
+"use strict";
+// ===== Protocolo Cube Baby (decodificado do CubeSuite e confirmado no pedal) =====
+// Quadro: 00 59 CMD LEN(3 LE) PAYLOAD CHK ; CHK = ~soma(payload) & 0xFF
+// SysEx: F0 + quadro empacotado em 7 bits (LSB primeiro) + F7
+const HDR = [0x00, 0x59];
+const CMD_INFO = 0x11, CMD_WRITE = 0x22, CMD_READ = 0x23, CMD_ACK = 0x00;
+const SPACE = 5, PSIZE = 16, PCOUNT = 3, EDIT_LEN = 13; // bytes 0..12 editáveis
+
+const FIELDS = [
+  { off:0, name:"Amp (Type)", max:8, show:v=>"Amp " + (v+1) },
+  { off:1, name:"Gain", max:7 },
+  { off:2, name:"Tone", max:15 },
+  { off:9, name:"IR Cab", max:8, show:v=>"Cab " + (v+1) },
+  { off:5, name:"Volume", max:127 },
+  { off:8, name:"Mod", max:15 },
+  { off:6, name:"Time (delay)", max:31 },
+  { off:4, name:"Feedback", max:127 },
+  { off:7, name:"Mix (delay)", max:118 },
+  { off:3, name:"Reverb", max:15 },
+];
+const SWITCHES = [ { off:10, name:"Efeito 1" }, { off:11, name:"Efeito 2" }, { off:12, name:"Efeito 3" } ];
+
+const sum8 = a => a.reduce((s, b) => (s + b) & 0xFF, 0);
+const buildFrame = (cmd, p) => [...HDR, cmd, p.length & 0xFF, (p.length >> 8) & 0xFF, (p.length >> 16) & 0xFF, ...p, (~sum8(p)) & 0xFF];
+function pack7(bytes) { const o = []; let acc = 0, bits = 0; for (const b of bytes) { acc |= (b & 0xFF) << bits; bits += 8; while (bits >= 7) { o.push(acc & 0x7F); acc >>>= 7; bits -= 7; } } if (bits > 0) o.push(acc & 0x7F); return o; }
+function unpack7(bytes) { const o = []; let acc = 0, bits = 0; for (const b of bytes) { acc |= (b & 0x7F) << bits; bits += 7; if (bits >= 8) { o.push(acc & 0xFF); acc >>>= 8; bits -= 8; } } return o; }
+function parseFrame(r) {
+  if (r.length < 7 || r[0] !== HDR[0] || r[1] !== HDR[1]) return null;
+  const cmd = r[2], len = r[3] | (r[4] << 8) | (r[5] << 16);
+  if (r.length < 7 + len) return { cmd, ok:false, why:"quadro curto" };
+  const payload = r.slice(6, 6 + len), ok = r[6 + len] === ((~sum8(payload)) & 0xFF);
+  return { cmd, payload, ok, why: ok ? "" : "checksum" };
+}
+const hex = a => Array.from(a, b => b.toString(16).padStart(2, "0").toUpperCase()).join(" ");
+const le32 = v => [v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF, (v >>> 24) & 0xFF];
+const le24 = v => [v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF];
+
+// ===== Transporte MIDI =====
+const $ = id => document.getElementById(id);
+function log(m, c) { const d = document.createElement("div"); if (c) d.className = c; d.textContent = `[${new Date().toLocaleTimeString("pt-BR")}] ${m}`; $("log").appendChild(d); $("log").scrollTop = 1e9; }
+function status(m, c) { $("status").textContent = m; $("status").className = c || ""; }
+
+let access = null, output = null, pending = null, queue = Promise.resolve();
+function onMidi(ev) {
+  const d = Array.from(ev.data);
+  if (d[0] === 0xF8 || d[0] === 0xFE) return;
+  if (d[0] !== 0xF0) { log("RX MIDI comum: " + hex(d), "warn"); return; }
+  const raw = unpack7(d.slice(1, d[d.length - 1] === 0xF7 ? -1 : undefined));
+  const fr = parseFrame(raw);
+  log("RX " + hex(raw).slice(0, 200));
+  if (!pending || !fr) return;
+  const p = pending; pending = null; clearTimeout(p.timer);
+  if (!fr.ok) p.reject(new Error("erro de " + fr.why));
+  else if (fr.cmd !== p.expect) p.reject(new Error(`resposta inesperada 0x${fr.cmd.toString(16)}`));
+  else p.resolve(fr);
+}
+function rawSend(cmd, payload, expect, timeoutMs = 2000) {
+  return new Promise((resolve, reject) => {
+    if (!output) return reject(new Error("pedal não conectado"));
+    const fr = buildFrame(cmd, payload);
+    log("TX " + hex(fr).slice(0, 200));
+    pending = { expect, resolve, reject, timer: setTimeout(() => { pending = null; reject(new Error("sem resposta do pedal")); }, timeoutMs) };
+    output.send([0xF0, ...pack7(fr), 0xF7]);
+  });
+}
+// fila: um comando por vez
+const send = (cmd, payload, expect) => (queue = queue.catch(() => {}).then(() => rawSend(cmd, payload, expect)));
+
+async function readPresets() {
+  const fr = await send(CMD_READ, [SPACE, ...le32(0), ...le24(PSIZE * PCOUNT)], CMD_READ);
+  const p = fr.payload;
+  if (p[0] !== SPACE || (p[5] | (p[6] << 8)) !== PSIZE * PCOUNT) throw new Error("leitura não confere");
+  return p.slice(8, 8 + PSIZE * PCOUNT);
+}
+async function writeBytes(addr, data) {
+  const fr = await send(CMD_WRITE, [SPACE, ...le32(addr), ...le24(data.length), ...data], CMD_ACK);
+  if (fr.payload[0] !== 0) throw new Error("pedal recusou a gravação (código " + fr.payload[0] + ")");
+}
+
+// ===== Estado e interface =====
+let presets = null, cur = 0;
+const LS_AUTO = "cubebaby.autobackup", LS_LIB = "cubebaby.library";
+const lsGet = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+
+function renderParams() {
+  const box = $("params"); box.innerHTML = "";
+  for (const f of FIELDS) {
+    const v = presets ? presets[cur * PSIZE + f.off] : 0;
+    const row = document.createElement("div"); row.className = "param"; row.id = "p" + f.off;
+    row.innerHTML = `<label>${f.name}</label><input type="range" min="0" max="${f.max}" value="${v}" ${presets ? "" : "disabled"}><output>${f.show ? f.show(v) : v}</output>`;
+    const r = row.querySelector("input"), o = row.querySelector("output");
+    r.oninput = () => { o.textContent = f.show ? f.show(+r.value) : r.value; };
+    r.onchange = () => setByte(f.off, +r.value, row);
+    box.appendChild(row);
+  }
+  const sw = $("switches"); sw.innerHTML = "";
+  for (const s of SWITCHES) {
+    const v = presets ? presets[cur * PSIZE + s.off] : 0;
+    const b = document.createElement("button"); b.textContent = `${s.name}: ${v ? "ligado" : "desligado"}`;
+    b.className = v ? "on" : ""; b.disabled = !presets;
+    b.onclick = () => setByte(s.off, v ? 0 : 1, null);
+    sw.appendChild(b);
+  }
+}
+async function setByte(off, val, row) {
+  const addr = cur * PSIZE + off;
+  if (row) { row.className = "param saving"; }
+  try {
+    ensureAutoBackup();
+    await writeBytes(addr, [val]);
+    const fresh = await readPresets();
+    if (fresh[addr] !== val) throw new Error(`gravou mas o pedal mostra ${fresh[addr]}`);
+    presets = fresh; log(`Preset ${"ABC"[cur]} byte ${off} = ${val}`, "ok");
+  } catch (e) { log("Erro: " + e.message, "err"); status("Erro: " + e.message, "err"); if (row) row.className = "param err"; }
+  renderParams();
+}
+function ensureAutoBackup() {
+  if (!lsGet(LS_AUTO, null) && presets) { lsSet(LS_AUTO, { data: new Date().toISOString(), bytes: presets }); showAutoInfo(); }
+}
+function showAutoInfo() {
+  const a = lsGet(LS_AUTO, null);
+  $("autoInfo").textContent = a ? `Backup automático de ${new Date(a.data).toLocaleString("pt-BR")} (feito antes da primeira alteração).` : "O backup automático é feito antes da primeira alteração.";
+  $("btnRestoreAuto").disabled = !(a && presets);
+}
+async function writePreset(slot, bytes16) {
+  await writeBytes(slot * PSIZE, bytes16.slice(0, EDIT_LEN));
+}
+async function restoreAll(bytes48, label) {
+  if (!confirm(`Gravar ${label} nos presets A, B e C do pedal? Os valores atuais serão substituídos.`)) return;
+  try {
+    for (let s = 0; s < PCOUNT; s++) await writePreset(s, bytes48.slice(s * PSIZE, s * PSIZE + PSIZE));
+    presets = await readPresets(); renderParams(); status("Presets restaurados.", "ok");
+  } catch (e) { status("Erro: " + e.message, "err"); log("Erro: " + e.message, "err"); }
+}
+
+// biblioteca
+function renderLib() {
+  const lib = lsGet(LS_LIB, []); const box = $("lib"); box.innerHTML = "";
+  if (!lib.length) { box.innerHTML = '<p class="hint">Nenhum preset guardado ainda.</p>'; return; }
+  lib.forEach((it, i) => {
+    const d = document.createElement("div"); d.className = "lib-item";
+    d.innerHTML = `<span>${it.name.replace(/</g, "&lt;")}</span><span class="row"></span>`;
+    const r = d.querySelector(".row");
+    for (const s of [0, 1, 2]) { const b = document.createElement("button"); b.className = "sec"; b.textContent = "→ " + "ABC"[s]; b.disabled = !presets;
+      b.onclick = async () => { if (!confirm(`Gravar "${it.name}" no preset ${"ABC"[s]}?`)) return;
+        try { ensureAutoBackup(); await writePreset(s, it.bytes); presets = await readPresets(); cur = s; selTab(); status(`"${it.name}" gravado no preset ${"ABC"[s]}.`, "ok"); }
+        catch (e) { status("Erro: " + e.message, "err"); } };
+      r.appendChild(b); }
+    const del = document.createElement("button"); del.className = "sec"; del.textContent = "✕";
+    del.onclick = () => { if (confirm(`Apagar "${it.name}" da biblioteca?`)) { lib.splice(i, 1); lsSet(LS_LIB, lib); renderLib(); } };
+    r.appendChild(del); box.appendChild(d);
+  });
+}
+$("btnLibSave").onclick = () => {
+  const name = $("libName").value.trim() || `Preset ${"ABC"[cur]} ${new Date().toLocaleString("pt-BR")}`;
+  const lib = lsGet(LS_LIB, []); lib.push({ name, bytes: presets.slice(cur * PSIZE, cur * PSIZE + PSIZE), data: new Date().toISOString() });
+  lsSet(LS_LIB, lib); $("libName").value = ""; renderLib();
+};
+
+function selTab() { document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", +t.dataset.p === cur)); renderParams(); }
+document.querySelectorAll(".tab").forEach(t => t.onclick = () => { cur = +t.dataset.p; selTab(); });
+
+$("btnExport").onclick = () => {
+  const data = { app: "cube-baby-presets", versao: 1, data: new Date().toISOString(), bytes: presets, biblioteca: lsGet(LS_LIB, []) };
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+  a.download = `cube-baby-${new Date().toISOString().slice(0, 10)}.json`; a.click();
+};
+$("btnImport").onclick = () => $("fileImport").click();
+$("fileImport").onchange = async (e) => {
+  try {
+    const d = JSON.parse(await e.target.files[0].text());
+    if (!Array.isArray(d.bytes) || d.bytes.length !== 48) throw new Error("arquivo sem os 48 bytes dos presets");
+    if (Array.isArray(d.biblioteca) && d.biblioteca.length && confirm("O arquivo também tem uma biblioteca. Juntar com a atual?")) { lsSet(LS_LIB, [...lsGet(LS_LIB, []), ...d.biblioteca]); renderLib(); }
+    await restoreAll(d.bytes, "o backup do arquivo");
+  } catch (err) { status("Erro: " + err.message, "err"); }
+  e.target.value = "";
+};
+$("btnRestoreAuto").onclick = () => { const a = lsGet(LS_AUTO, null); if (a) restoreAll(a.bytes, "o backup automático"); };
+let lastProbe = null;
+async function readRaw(space, addr, len) {
+  const fr = await send(CMD_READ, [space, ...le32(addr), ...le24(len)], CMD_READ);
+  return fr.payload.slice(8, 8 + len);
+}
+$("btnProbe").onclick = async () => {
+  const areas = [[5, 0x30, 32], [0, 0x3000, 16]];
+  const out = {};
+  for (const [sp, ad, ln] of areas) {
+    const k = `esp.${sp} end.0x${ad.toString(16)}`;
+    try { out[k] = await readRaw(sp, ad, ln); } catch (e) { out[k] = null; log(`${k}: ${e.message}`, "warn"); }
+  }
+  try { out["presets"] = await readPresets(); } catch {}
+  const lines = [`Leitura das ${new Date().toLocaleTimeString("pt-BR")}`];
+  for (const [k, v] of Object.entries(out)) {
+    if (!v) { lines.push(`${k}: sem resposta`); continue; }
+    const prev = lastProbe && lastProbe[k];
+    const diff = prev ? v.map((b, i) => b !== prev[i] ? `byte ${i}: ${prev[i]}→${b}` : null).filter(Boolean) : [];
+    lines.push(`${k}: ${hex(v)}` + (prev ? (diff.length ? `  ⟵ MUDOU: ${diff.join(", ")}` : "  (igual)") : ""));
+  }
+  lastProbe = out;
+  $("probeOut").innerText = lines.join("\n");
+  log(lines.join(" | "));
+};
+document.querySelectorAll(".pc").forEach(b => b.onclick = () => {
+  const n = +b.dataset.n;
+  output.send([0xC0, n]); log(`TX Program Change canal 1: C0 ${hex([n])}`);
+});
+$("btnCopy").onclick = () => navigator.clipboard.writeText($("log").innerText);
+
+$("btnConnect").onclick = async () => {
+  if (!navigator.requestMIDIAccess) { status("Este navegador não tem Web MIDI. Use Chrome ou Edge.", "err"); return; }
+  try {
+    access = await navigator.requestMIDIAccess({ sysex: true });
+    access.onstatechange = (ev) => { if (ev.port.state === "disconnected" && ev.port === output) { output = null; status("Pedal desconectado", "warn"); } };
+    for (const i of access.inputs.values()) { i.onmidimessage = onMidi; try { await i.open(); } catch {} }
+    output = null;
+    for (const o of access.outputs.values()) {
+      if (/wavetable|gs synth/i.test(o.name)) continue;
+      output = o;
+      try {
+        const fr = await send(CMD_INFO, [], CMD_INFO);
+        const name = String.fromCharCode(...fr.payload.slice(0, 20)).trim();
+        status(`Conectado: ${name}`, "ok"); log("Pedal: " + name, "ok"); break;
+      } catch { output = null; }
+    }
+    if (!output) { status("Pedal não encontrado. Feche o CubeSuite, confira o cabo e tente de novo.", "err"); return; }
+    presets = await readPresets();
+    for (const id of ["btnLibSave", "btnExport", "btnImport", "btnProbe"]) $(id).disabled = false;
+    document.querySelectorAll(".pc").forEach(b => b.disabled = false);
+    renderParams(); renderLib(); showAutoInfo();
+  } catch (e) { status("Erro: " + e.message, "err"); log("Erro: " + e.message, "err"); }
+};
+
+renderParams(); renderLib(); showAutoInfo();
+</script>
+</body>
+</html>

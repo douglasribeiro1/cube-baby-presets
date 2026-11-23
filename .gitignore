@@ -1,0 +1,16 @@
+*.iml
+.gradle/
+local.properties
+.idea/
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.keystore
+*.jks
+keystore.properties
+# nunca versionar o CubeSuite nem firmware
+CubeSuite/
+*.exe
+*.dll
+*.etl

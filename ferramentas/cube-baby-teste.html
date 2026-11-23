@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cube Baby — teste de conexão</title>
+<style>
+  :root { --bg:#14161a; --card:#1e2127; --tx:#e8e8e8; --mut:#9aa0a6; --ac:#33eab8; --warn:#ffb74d; --err:#ff6b6b; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family: system-ui, Segoe UI, Roboto, sans-serif; background:var(--bg); color:var(--tx); }
+  header { padding:16px 20px; border-bottom:1px solid #2a2e35; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  header p { margin:0; color:var(--mut); font-size:14px; }
+  main { padding:16px 20px; display:grid; gap:16px; max-width:1100px; }
+  .card { background:var(--card); border-radius:12px; padding:16px; }
+  .card h2 { font-size:16px; margin:0 0 12px; }
+  button { background:var(--ac); color:#0b1a15; border:0; border-radius:8px; padding:10px 14px; font-weight:600; font-size:14px; cursor:pointer; margin:0 8px 8px 0; }
+  button.sec { background:#2f343c; color:var(--tx); }
+  button:disabled { opacity:.4; cursor:not-allowed; }
+  select { background:#2f343c; color:var(--tx); border:0; border-radius:8px; padding:8px; font-size:14px; margin:0 8px 8px 0; }
+  label { font-size:14px; color:var(--mut); margin-right:6px; }
+  #status { font-size:14px; margin-top:4px; }
+  .ok { color:var(--ac); } .warn { color:var(--warn); } .err { color:var(--err); }
+  table { border-collapse:collapse; width:100%; font-size:14px; }
+  th, td { padding:6px 8px; border-bottom:1px solid #2a2e35; text-align:left; }
+  th { color:var(--mut); font-weight:500; }
+  td.num { font-variant-numeric: tabular-nums; text-align:center; }
+  td.changed { background:rgba(255,183,77,.25); color:#fff; font-weight:700; }
+  #log { font-family: Consolas, monospace; font-size:12px; background:#0f1114; border-radius:8px; padding:10px; height:260px; overflow:auto; white-space:pre-wrap; }
+  .hint { color:var(--mut); font-size:13px; line-height:1.5; }
+  .row { display:flex; flex-wrap:wrap; align-items:center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Cube Baby — teste de conexão (somente leitura)</h1>
+  <p>Esta página só lê dados do pedal. Ela não grava, não apaga e não altera nada.</p>
+</header>
+<main>
+
+<section class="card">
+  <h2>1. Conectar</h2>
+  <p class="hint">Se não responder: confira se o CubeSuite está <b>totalmente fechado</b> (inclusive na bandeja ao lado do relógio), desligue e religue o pedal, reconecte o cabo e recarregue a página (F5). Feche o CubeSuite antes, ligue o pedal e conecte o cabo USB. Quando o navegador pedir permissão para acessar dispositivos MIDI, clique em <b>Permitir</b>.</p>
+  <div class="row">
+    <button id="btnConnect">Conectar ao MIDI</button>
+    <label>Entrada</label><select id="selIn"></select>
+    <label>Saída</label><select id="selOut"></select>
+  </div>
+  <div id="status" class="mut">Desconectado.</div>
+</section>
+
+<section class="card">
+  <h2>2. Testes</h2>
+  <div class="row">
+    <button id="btnScan" disabled>Procurar pedal em todas as portas</button>
+    <button id="btnInfo" disabled>Identificar pedal</button>
+    <button id="btnUni" class="sec" disabled>Teste MIDI padrão</button>
+    <button id="btnRead" disabled>Ler os 3 presets</button>
+    <button id="btnMon" class="sec" disabled>Monitorar (ler a cada 1 s)</button>
+    <button id="btnExport" class="sec" disabled>Salvar backup (.json)</button>
+  </div>
+  <div id="info" class="hint"></div>
+</section>
+
+<section class="card">
+  <h2>3. Presets lidos do pedal</h2>
+  <p class="hint">Os nomes das colunas são a minha leitura do CubeSuite e ainda precisam de confirmação. Para conferir, ligue o <b>Monitorar</b>, gire um botão do pedal e veja qual célula acende em laranja.</p>
+  <div id="presets" class="hint">Nada lido ainda.</div>
+</section>
+
+<section class="card">
+  <h2>Registro técnico</h2>
+  <p class="hint">Se algo der errado, copie este registro e me mande.</p>
+  <div class="row"><button id="btnCopy" class="sec">Copiar registro</button><button id="btnClear" class="sec">Limpar</button></div>
+  <div id="log"></div>
+</section>
+
+</main>
+<script>
+"use strict";
+// ---------- Protocolo (decodificado do CubeSuite) ----------
+// Quadro: 00 59 CMD LEN(3 bytes LE) PAYLOAD... CHK, com CHK = ~soma(payload) & 0xFF
+// Transporte: F0 + quadro empacotado em 7 bits (fluxo de bits LSB primeiro) + F7
+const HDR = [0x00, 0x59];
+const CMD_INFO = 0x11, CMD_READ = 0x23;
+const SPACE_PRESETS = 5;
+const PRESET_SIZE = 16, PRESET_COUNT = 3;
+
+// Mapa provisório dos 16 bytes de cada preset
+const FIELDS = [
+  { off:0,  name:"Type (amp)",   max:8 },
+  { off:1,  name:"Gain",         max:7 },
+  { off:2,  name:"Tone",         max:15 },
+  { off:3,  name:"Reverb",       max:15 },
+  { off:4,  name:"Feedback",     max:127 },
+  { off:5,  name:"Volume",       max:127 },
+  { off:6,  name:"Time (delay)", max:31 },
+  { off:7,  name:"Mix",          max:118 },
+  { off:8,  name:"Mod",          max:15 },
+  { off:9,  name:"IR Cab",       max:8 },
+  { off:10, name:"Chave 1?",     max:null },
+  { off:11, name:"Chave 2?",     max:null },
+  { off:12, name:"Chave 3?",     max:null },
+  { off:13, name:"byte 13",      max:null },
+  { off:14, name:"byte 14",      max:null },
+  { off:15, name:"byte 15",      max:null },
+];
+
+function checksum(bytes) { let s = 0; for (const b of bytes) s = (s + b) & 0xFF; return (~s) & 0xFF; }
+function buildFrame(cmd, payload) {
+  const n = payload.length;
+  return [...HDR, cmd, n & 0xFF, (n >> 8) & 0xFF, (n >> 16) & 0xFF, ...payload, checksum(payload)];
+}
+function pack7(bytes) {
+  const out = []; let acc = 0, bits = 0;
+  for (const b of bytes) {
+    acc |= (b & 0xFF) << bits; bits += 8;
+    while (bits >= 7) { out.push(acc & 0x7F); acc >>>= 7; bits -= 7; }
+  }
+  if (bits > 0) out.push(acc & 0x7F);
+  return out;
+}
+function unpack7(bytes) {
+  const out = []; let acc = 0, bits = 0;
+  for (const b of bytes) {
+    acc |= (b & 0x7F) << bits; bits += 7;
+    if (bits >= 8) { out.push(acc & 0xFF); acc >>>= 8; bits -= 8; }
+  }
+  return out;
+}
+function parseFrame(raw) {
+  if (raw.length < 7 || raw[0] !== HDR[0] || raw[1] !== HDR[1]) return null;
+  const cmd = raw[2], len = raw[3] | (raw[4] << 8) | (raw[5] << 16);
+  if (raw.length < 7 + len) return { cmd, len, payload: raw.slice(6), ok: false, why: "quadro curto" };
+  const payload = raw.slice(6, 6 + len), chk = raw[6 + len];
+  return { cmd, len, payload, ok: chk === checksum(payload), why: chk === checksum(payload) ? "" : "checksum" };
+}
+const hex = a => Array.from(a, b => b.toString(16).padStart(2, "0").toUpperCase()).join(" ");
+const le32 = v => [v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF, (v >>> 24) & 0xFF];
+const le24 = v => [v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF];
+
+// ---------- Interface ----------
+const $ = id => document.getElementById(id);
+const logEl = $("log");
+function log(msg, cls) {
+  const t = new Date().toLocaleTimeString("pt-BR");
+  const line = document.createElement("div");
+  if (cls) line.className = cls;
+  line.textContent = `[${t}] ${msg}`;
+  logEl.appendChild(line); logEl.scrollTop = logEl.scrollHeight;
+}
+function setStatus(msg, cls) { const s = $("status"); s.textContent = msg; s.className = cls || ""; }
+
+let access = null, input = null, output = null;
+let pending = null; // { cmd, resolve, reject, timer }
+let lastPresets = null, deviceInfo = null, monTimer = null, busy = false;
+
+function onMidi(ev, port) {
+  const d = Array.from(ev.data);
+  const pn = port ? ` [${port.name}]` : "";
+  if (d[0] === 0xF8 || d[0] === 0xFE) return;
+  if (d[0] !== 0xF0) { log(`RX${pn} (não-SysEx): ${hex(d)}`); return; }
+  const body = d.slice(1, d[d.length - 1] === 0xF7 ? -1 : undefined);
+  const raw = unpack7(body);
+  const fr = parseFrame(raw);
+  log(`RX${pn} ${fr ? "cmd 0x" + fr.cmd.toString(16) : "?"} ${fr && !fr.ok ? "(erro: " + fr.why + ") " : ""}: ${hex(raw).slice(0, 300)}`);
+  if (pending && fr) {
+    const p = pending; pending = null; clearTimeout(p.timer);
+    if (!fr.ok) p.reject(new Error("Resposta com erro de " + fr.why));
+    else if (fr.cmd !== p.cmd) p.reject(new Error(`Resposta inesperada (cmd 0x${fr.cmd.toString(16)}), payload ${hex(fr.payload)}`));
+    else p.resolve(fr);
+  }
+}
+function send(cmd, payload, timeoutMs = 3000) {
+  return new Promise((resolve, reject) => {
+    if (!output) return reject(new Error("Sem saída MIDI selecionada"));
+    if (pending) return reject(new Error("Outra operação em andamento"));
+    const fr = buildFrame(cmd, payload);
+    const sx = [0xF0, ...pack7(fr), 0xF7];
+    log(`TX cmd 0x${cmd.toString(16)}: ${hex(fr)}`);
+    pending = { cmd, resolve, reject, timer: setTimeout(() => { pending = null; reject(new Error("Sem resposta do pedal (tempo esgotado)")); }, timeoutMs) };
+    try { output.send(sx); } catch (e) { clearTimeout(pending.timer); pending = null; reject(e); }
+  });
+}
+async function readMem(space, addr, len) {
+  const out = [];
+  while (out.length < len) {
+    const n = Math.min(1009, len - out.length);
+    const fr = await send(CMD_READ, [space, ...le32(addr + out.length), ...le24(n)]);
+    const p = fr.payload; // [space][addr4][len3][dados]
+    const gotLen = p[5] | (p[6] << 8) | (p[7] << 16);
+    if (p[0] !== space || gotLen !== n) throw new Error("Resposta de leitura não confere");
+    out.push(...p.slice(8, 8 + n));
+  }
+  return out;
+}
+
+function fillPorts() {
+  const si = $("selIn"), so = $("selOut");
+  si.innerHTML = ""; so.innerHTML = "";
+  const pick = name => /usb.?midi|cube|m-?vave|cuvave/i.test(name);
+  for (const p of access.inputs.values()) si.add(new Option(p.name, p.id, false, pick(p.name)));
+  for (const p of access.outputs.values()) so.add(new Option(p.name, p.id, false, pick(p.name)));
+  bindPorts();
+}
+function bindPorts() {
+  for (const p of access.inputs.values()) p.onmidimessage = (ev) => onMidi(ev, p);
+  input = access.inputs.get($("selIn").value) || null;
+  output = access.outputs.get($("selOut").value) || null;
+  $("btnScan").disabled = access.outputs.size === 0;
+  $("btnUni").disabled = access.outputs.size === 0;
+  const ok = !!(input && output);
+  for (const id of ["btnInfo", "btnRead", "btnMon"]) $(id).disabled = !ok;
+  if (ok) setStatus(`Conectado: entrada "${input.name}", saída "${output.name}".`, "ok");
+  else setStatus("Nenhuma porta MIDI encontrada. Confira o cabo e se o pedal está ligado.", "warn");
+}
+
+$("btnConnect").onclick = async () => {
+  if (!navigator.requestMIDIAccess) { setStatus("Este navegador não tem Web MIDI. Use o Chrome ou o Edge.", "err"); return; }
+  try {
+    access = await navigator.requestMIDIAccess({ sysex: true });
+    access.onstatechange = () => fillPorts();
+    fillPorts();
+    log("Acesso MIDI liberado.");
+    for (const p of [...access.inputs.values(), ...access.outputs.values()]) {
+      try { await p.open(); log(`${p.type === "input" ? "Entrada" : "Saída"} "${p.name}" aberta: ${p.state}/${p.connection} (${p.manufacturer || "?"})`, "ok"); }
+      catch (e) { log(`Não consegui abrir "${p.name}" (${p.type}): ${e.name} ${e.message}. A porta pode estar em uso por outro programa.`, "err"); }
+    }
+  } catch (e) { setStatus("Permissão negada ou erro: " + e.message, "err"); log("Erro: " + e.message, "err"); }
+};
+$("selIn").onchange = bindPorts; $("selOut").onchange = bindPorts;
+
+$("btnUni").onclick = () => {
+  // Pedido de identidade universal (padrão MIDI) + escuta de qualquer resposta
+  for (const o of access.outputs.values()) {
+    try { o.send([0xF0, 0x7E, 0x7F, 0x06, 0x01, 0xF7]); log(`TX identidade universal para "${o.name}": F0 7E 7F 06 01 F7`); }
+    catch (e) { log(`Erro ao enviar para "${o.name}": ${e.message}`, "err"); }
+  }
+  log("Agora aperte as chaves A, B e C do pedal e gire um botão. Qualquer coisa que chegar aparece aqui como RX.");
+};
+$("btnScan").onclick = async () => {
+  $("btnScan").disabled = true;
+  const saved = output; let found = null;
+  for (const o of access.outputs.values()) {
+    output = o;
+    log(`Testando saída "${o.name}"...`);
+    try { const fr = await send(CMD_INFO, [], 2500); found = o; log(`Pedal respondeu pela saída "${o.name}".`, "ok"); break; }
+    catch (e) { log(`  sem resposta: ${e.message}`, "warn"); }
+  }
+  if (found) { $("selOut").value = found.id; output = found; $("btnInfo").click(); }
+  else { output = saved; log("Nenhuma saída respondeu. Veja as dicas na seção 1.", "err"); }
+  $("btnScan").disabled = false;
+};
+$("btnInfo").onclick = async () => {
+  try {
+    const fr = await send(CMD_INFO, []);
+    const p = fr.payload;
+    const ascii = p.map(b => (b >= 32 && b < 127) ? String.fromCharCode(b) : "·").join("");
+    deviceInfo = { payloadHex: hex(p), ascii };
+    $("info").innerHTML = `<b class="ok">O pedal respondeu.</b> Texto: <code>${ascii}</code><br>Bytes: <code>${hex(p)}</code>`;
+    log("Identificação OK: " + ascii, "ok");
+  } catch (e) { $("info").innerHTML = `<span class="err">${e.message}</span>`; log("Erro: " + e.message, "err"); }
+};
+
+function renderPresets(bytes, prev) {
+  let h = "<table><tr><th>Campo (provisório)</th>";
+  for (let i = 0; i < PRESET_COUNT; i++) h += `<th style="text-align:center">Preset ${"ABC"[i]}</th>`;
+  h += "</tr>";
+  for (const f of FIELDS) {
+    h += `<tr><td>${f.name} <span style="color:#666">[${f.off}]</span></td>`;
+    for (let i = 0; i < PRESET_COUNT; i++) {
+      const k = i * PRESET_SIZE + f.off, v = bytes[k];
+      const ch = prev && prev[k] !== v;
+      const over = f.max !== null && v > f.max;
+      h += `<td class="num${ch ? " changed" : ""}"${over ? ' style="color:#ff6b6b"' : ""}>${v}</td>`;
+    }
+    h += "</tr>";
+  }
+  $("presets").innerHTML = h + "</table>";
+}
+async function readPresets(quiet) {
+  if (busy) return; busy = true;
+  try {
+    const b = await readMem(SPACE_PRESETS, 0, PRESET_SIZE * PRESET_COUNT);
+    renderPresets(b, lastPresets);
+    if (lastPresets && b.some((v, i) => v !== lastPresets[i])) {
+      const diffs = b.map((v, i) => v !== lastPresets[i] ? `preset ${"ABC"[Math.floor(i / 16)]} byte ${i % 16}: ${lastPresets[i]}→${v}` : null).filter(Boolean);
+      log("Mudou: " + diffs.join("; "), "warn");
+    }
+    lastPresets = b; $("btnExport").disabled = false;
+    if (!quiet) log("Presets lidos.", "ok");
+  } catch (e) { log("Erro: " + e.message, "err"); if (!quiet) $("presets").innerHTML = `<span class="err">${e.message}</span>`; stopMon(); }
+  finally { busy = false; }
+}
+$("btnRead").onclick = () => readPresets(false);
+function stopMon() { if (monTimer) { clearInterval(monTimer); monTimer = null; $("btnMon").textContent = "Monitorar (ler a cada 1 s)"; } }
+$("btnMon").onclick = () => {
+  if (monTimer) { stopMon(); return; }
+  monTimer = setInterval(() => readPresets(true), 1000);
+  $("btnMon").textContent = "Parar monitoramento";
+  readPresets(true);
+};
+$("btnExport").onclick = () => {
+  const data = { app: "cube-baby-teste", data: new Date().toISOString(), pedal: deviceInfo, presetsHex: hex(lastPresets),
+    presets: [0, 1, 2].map(i => Object.fromEntries(FIELDS.map(f => [f.name, lastPresets[i * 16 + f.off]]))) };
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+  a.download = "cube-baby-backup.json"; a.click();
+};
+$("btnCopy").onclick = () => navigator.clipboard.writeText(logEl.innerText).then(() => log("Registro copiado."));
+$("btnClear").onclick = () => { logEl.innerHTML = ""; };
+</script>
+</body>
+</html>
