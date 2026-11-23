@@ -33,7 +33,7 @@ App Android nativo (Kotlin) para editar e gerenciar os presets do pedal **M-Vave
    - O site não informa as chaves de efeito (bytes 10–12): ao importar, manter as do timbre atual ou ligar as três (perguntar na primeira vez).
    - Validar faixas antes de gravar; recusar presets de outros modelos (Cube Baby Bass/AC).
    - Mostrar autor e link do preset original na biblioteca (crédito).
-8. **Nomes editáveis** dos 9 amps e 8 caixas (padrão "Amp 1…9", "Cab 1…8"), porque os nomes reais ainda não foram confirmados.
+8. **Nomes dos amps e caixas**: usar como padrão os nomes do manual (tabelas em docs/PROTOCOLO.md, "Nomes dos modelos"), mostrando nome + número; permitir renomear no app (o usuário pode ter carregado IRs próprias ou ter firmware com outra lista). O MOD deve mostrar Chorus/Desligado/Phaser conforme a posição.
 
 ## Fora do escopo
 Carregar IR, atualizar firmware, trocar o preset ativo (o pedal não permite pelo USB), efeitos processados no celular (latência inviável).

@@ -91,6 +91,40 @@ C: 01 07 07 05 34 6F 14 0C 05 02 01 01 01 00 00 00
 ### Compatibilidade com a comunidade
 O site https://cube-baby-presets.vercel.app usa os mesmos nomes do CubeSuite (volume, ir cab, reverb, mix, fb, time, mod, tone, gain, type) e valores na mesma escala dos bytes 0–9 (ex.: fb 84 e volume 41, dentro de 0–127). Ou seja, os valores do site podem ser gravados direto nos bytes correspondentes. O site não traz as chaves de efeito (bytes 10–12) nem a IR personalizada.
 
+### Nomes dos modelos (manual do Cube Baby, cópia em manualslib.tech/guide/943674)
+Valor do byte 0 (Type), na ordem do botão:
+| Valor | Amp (pré) | Tipo |
+|---|---|---|
+| 0 | Power-Zone Clean | Clean |
+| 1 | US Gold 100 Clean | Clean |
+| 2 | Two Stone Coral OD | Overdrive |
+| 3 | Doctor3 B | Overdrive |
+| 4 | Cali JP A | Overdrive |
+| 5 | Day Tripper OD | Distortion |
+| 6 | Shittcow Dist | Distortion |
+| 7 | Wo Stone Coral OD | Distortion |
+| 8 | Mr Smith Dist | Distortion |
+
+Valor do byte 9 (IR Cab): 0 = IR desligada; 1–8 = caixas:
+| Valor | Caixa | Falantes |
+|---|---|---|
+| 0 | IR desligada | — |
+| 1 | Line 6 Vetta | 2×12 |
+| 2 | Marshall 1960AV | 4×12 |
+| 3 | Marshall 1960A T75 LA610 | 4×12 |
+| 4 | VHT Deliverance | 2×12 |
+| 5 | Soldano | 2×12 |
+| 6 | Peavey 5150 + Mesa Oversized | 4×12 |
+| 7 | JSX KT77 + Mesa Stiletto AKG C1000 | 4×12 |
+| 8 | Diezel V30 SM57 (Soldano HR PowerAmp) | 4×12 |
+Obs.: um slot de caixa substituído por IR carregada pelo CubeSuite passa a soar diferente do nome de fábrica.
+
+Outras regras do manual úteis para a interface:
+- MOD: metade esquerda = Chorus, metade direita = Phaser, centro = desligado.
+- MIX (delay): todo à esquerda desliga o delay. REVERB: todo à esquerda desliga o reverb.
+- Ordem dos botões no painel: TYPE, GAIN, TONE, MOD, TIME, FB, MIX, REVERB, IR CAB, VOLUME.
+- Um anúncio antigo (Lekato) lista outros nomes de amp (US Gold 50 B, UK Gold Clean, Cali-MK 3 Clean, Power-Zone Dist, Power-Zone Clean, US Gold 100 Clean, Cali JP A, Cali JP B, Gas Station Clean), provavelmente de outra versão de hardware/firmware. Usar a lista do manual como padrão; confirmar de ouvido (0–1 limpos, 5–8 distorcidos).
+
 ### Comportamento observado
 - Gravar um byte no espaço 5 → ACK com status 0 → a releitura mostra o valor novo. Funciona.
 - Gravar no preset **que está ativo** muda o som **na hora** (confirmado pelas chaves de efeito). Isso permite o "modo palco": deixar o pedal sempre no A e mandar timbres do celular para o A.
