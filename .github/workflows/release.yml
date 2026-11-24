@@ -35,15 +35,16 @@ jobs:
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
 
+      # Só KEYSTORE_BASE64 e KEYSTORE_PASSWORD são obrigatórios.
+      # KEY_ALIAS e KEY_PASSWORD são opcionais: o alias é detectado na keystore e,
+      # em keystores PKCS12 (padrão do keytool), a senha da chave é a da keystore.
       - name: Conferir Secrets
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           faltando=""
-          for v in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+          for v in KEYSTORE_BASE64 KEYSTORE_PASSWORD; do
             [ -n "${!v}" ] || faltando="$faltando $v"
           done
           if [ -n "$faltando" ]; then
@@ -56,46 +57,46 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: printf '%s' "$KEYSTORE_BASE64" | tr -d ' \r\n\t' | base64 --decode > "$RUNNER_TEMP/release.jks"
 
-      # Diz exatamente qual Secret não bate (sem mostrar nenhum valor).
-      - name: Diagnosticar keystore
+      # Confere a keystore e escolhe alias e senha da chave (sem mostrar nenhum valor).
+      - name: Conferir keystore
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           ks="$RUNNER_TEMP/release.jks"
+          lista="$RUNNER_TEMP/lista.txt"
           echo "Arquivo restaurado: $(stat -c%s "$ks") bytes, SHA-256 $(sha256sum "$ks" | cut -d' ' -f1)"
-          for v in KEYSTORE_PASSWORD KEY_PASSWORD KEY_ALIAS; do
-            val="${!v}"
-            if [ "$val" != "$(printf '%s' "$val" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')" ]; then
-              echo "::warning::$v começa ou termina com espaço/quebra de linha"
-            fi
-          done
-          if ! keytool -list -keystore "$ks" -storepass:env KEYSTORE_PASSWORD > "$RUNNER_TEMP/lista.txt" 2>&1; then
+          if [ "$KEYSTORE_PASSWORD" != "$(printf '%s' "$KEYSTORE_PASSWORD" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')" ]; then
+            echo "::warning::KEYSTORE_PASSWORD começa ou termina com espaço/quebra de linha"
+          fi
+          if ! keytool -list -keystore "$ks" -storepass:env KEYSTORE_PASSWORD > "$lista" 2>&1; then
             echo "::error::KEYSTORE_PASSWORD não abre o arquivo de KEYSTORE_BASE64 (senha errada ou Base64 de outro arquivo)."
-            grep -i -E "exception|error" "$RUNNER_TEMP/lista.txt" | head -3
-            exit 1
+            grep -i -E "exception|error" "$lista" | head -3
+            rm -f "$lista"; exit 1
           fi
-          grep -i "keystore type" "$RUNNER_TEMP/lista.txt"
-          echo "Entradas na keystore: $(grep -ciE 'PrivateKeyEntry' "$RUNNER_TEMP/lista.txt")"
-          if ! keytool -list -keystore "$ks" -storepass:env KEYSTORE_PASSWORD -alias "$KEY_ALIAS" > /dev/null 2>&1; then
-            echo "::error::KEY_ALIAS não existe nessa keystore. Aliases encontrados:"
-            grep -E "PrivateKeyEntry" "$RUNNER_TEMP/lista.txt" | cut -d, -f1
-            exit 1
+          grep -i "keystore type" "$lista"
+          aliases=$(grep -E "PrivateKeyEntry" "$lista" | cut -d, -f1)
+          if [ -n "$KEY_ALIAS" ] && printf '%s\n' "$aliases" | grep -qxF "$KEY_ALIAS"; then
+            alias="$KEY_ALIAS"
+          elif [ "$(printf '%s\n' "$aliases" | grep -c .)" = "1" ]; then
+            alias="$aliases"
+            [ -n "$KEY_ALIAS" ] && echo "::warning::KEY_ALIAS não existe na keystore; usando a única chave encontrada ($alias)."
+          else
+            echo "::error::Não consegui escolher a chave. Aliases na keystore:"; printf '%s\n' "$aliases"
+            rm -f "$lista"; exit 1
           fi
-          if grep -qi "keystore type: PKCS12" "$RUNNER_TEMP/lista.txt" && [ "$KEY_PASSWORD" != "$KEYSTORE_PASSWORD" ]; then
-            echo "::error::A keystore é PKCS12: KEY_PASSWORD precisa ser igual a KEYSTORE_PASSWORD."
-            exit 1
-          fi
-          rm -f "$RUNNER_TEMP/lista.txt"
-          echo "Keystore, alias e senhas conferem."
+          if grep -qi "keystore type: PKCS12" "$lista"; then usar_key_password=0; else usar_key_password=1; fi
+          rm -f "$lista"
+          echo "ALIAS_ASSINATURA=$alias" >> "$GITHUB_ENV"
+          echo "USAR_KEY_PASSWORD=$usar_key_password" >> "$GITHUB_ENV"
+          echo "Keystore confere. Chave: $alias"
 
       - name: Testes e APK release assinado
         env:
           KEYSTORE_FILE: ${{ runner.temp }}/release.jks
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ env.ALIAS_ASSINATURA }}
+          KEY_PASSWORD: ${{ (env.USAR_KEY_PASSWORD == '1' && secrets.KEY_PASSWORD != '') && secrets.KEY_PASSWORD || secrets.KEYSTORE_PASSWORD }}
         run: ./gradlew --no-daemon -PappVersion="$VERSAO" testReleaseUnitTest assembleRelease
 
       - name: Verificar assinatura e renomear
