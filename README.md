@@ -21,4 +21,4 @@ O APK assinado é gerado pelo GitHub Actions (workflow **Release**), de dois jei
 - **Pelo site:** aba **Actions → Release → Run workflow**, informe a versão (ex.: `0.2.0`) e confirme. O workflow cria a tag `v0.2.0` e publica o APK em **Releases**.
 - **Por tag:** `git tag -a v0.2.0 -m "v0.2.0"` e `git push origin v0.2.0`.
 
-A versão define o `versionName` (`0.2.0`) e o `versionCode` (`maior*10000 + menor*100 + correção`, ex.: 200). Use sempre uma versão maior que a anterior para o Android aceitar a atualização. A assinatura usa os Secrets `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS` e `KEY_PASSWORD`.
+A versão define o `versionName` (`0.2.0`) e o `versionCode` (`maior*10000 + menor*100 + correção`, ex.: 200). Use sempre uma versão maior que a anterior para o Android aceitar a atualização. A assinatura usa dois Secrets obrigatórios, `KEYSTORE_BASE64` (o arquivo da keystore em Base64) e `KEYSTORE_PASSWORD`. `KEY_ALIAS` e `KEY_PASSWORD` são opcionais: o alias é detectado na keystore e, em keystores PKCS12, a senha da chave é a mesma da keystore. Guarde uma cópia da keystore e da senha fora do GitHub: sem elas não dá para atualizar o app instalado.
